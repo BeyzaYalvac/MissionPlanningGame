@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "605582906262",
+    "project_id": "togamegradproject",
+    "storage_bucket": "togamegradproject.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:605582906262:android:e948fe43f49eb8dc0783b7",
+        "android_client_info": {
+          "package_name": "com.example.to_gram_grad_project"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB-KAzcwn8J8-EggbNhy5HoGXaKQyZ81LI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
