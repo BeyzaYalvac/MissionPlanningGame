@@ -1,7 +1,6 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-
 import '../service/auth.dart';
+import 'login.dart';
 
 class Register extends StatefulWidget {
   const Register({super.key});
@@ -11,220 +10,108 @@ class Register extends StatefulWidget {
 }
 
 class _RegisterState extends State<Register> {
-  TextEditingController _usernameController = TextEditingController();
-  TextEditingController _emailController = TextEditingController();
-  TextEditingController _password1Controller = TextEditingController();
-  TextEditingController _password2Controller = TextEditingController();
-  TextEditingController _nameController = TextEditingController();
-  TextEditingController _surnameController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _password1Controller = TextEditingController();
+  final TextEditingController _password2Controller = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _surnameController = TextEditingController();
 
-  final key = GlobalKey<FormState>();
-  String name = '';
+  final _formKey = GlobalKey<FormState>();
+
   @override
   Widget build(BuildContext context) {
     LoginServices loginServices = LoginServices();
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: Colors.white,
       body: Form(
-        key: key,
+        key: _formKey,
         child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
-            spacing: 60,
             children: [
-              LogInRegisterHeader(),
-              Header(title: 'Register'),
-              SingleChildScrollView(
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        RegisterTextFieldFormName(
-                          hintText: 'Name',
-                          label: 'Your Name',
-                          icon: Icons.account_box,
-                          controller: _nameController,
-                          name: _nameController.text,
-                        ),
-                        SizedBox(
-                          width: 10,
-                        ),
-                        SizedBox(
-                          width: 1,
-                          height: 44,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.onPrimary),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 10,
-                        ),
-                        RegisterTextFieldFormName(
-                          hintText: 'Surname',
-                          label: 'Your Surname',
-                          icon: Icons.account_box,
-                          controller: _surnameController,
-                          name: _surnameController.text,
-                        ),
-                      ],
-                    ),
-                    SizedBox(
-                      height: 20,
-                    ),
-                    TextFieldForm(
-                      hintText: 'username123',
-                      label: 'username',
-                      icon: Icons.drive_file_rename_outline,
-                      controller: _usernameController,
-                      name: _usernameController.text,
-                    ),
-                    SizedBox(
-                      height: 20,
-                    ),
-                    TextFieldForm(
-                      hintText: 'abc@gmail.com',
-                      label: 'e-mail',
-                      icon: Icons.account_box,
-                      controller: _emailController,
-                      name: _emailController.text,
-                    ),
-                    SizedBox(
-                      height: 20,
-                    ),
-                    SizedBox(
-                      width: MediaQuery.of(context).size.width * 0.9,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 18.0),
-                        child: TextFormField(
-                          decoration: InputDecoration(
-                            enabledBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onPrimary)),
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: Theme.of(context).colorScheme.primary,
-                                width: 3,
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            hintText: '*******',
-                            hintStyle: TextStyle(
-                                color: Theme.of(context).colorScheme.onPrimary),
-                            label: Text(
-                              'Password check',
-                              style: TextStyle(
-                                  color:
-                                  Theme.of(context).colorScheme.onPrimary),
-                            ),
-                            icon: Icon(
-                              Icons.password_sharp,
-                              color: Theme.of(context).colorScheme.onPrimary,
-                            ),
-                          ),
-                          controller: _password1Controller,
-                          validator: (value) {
-                            if (value!.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text('Please fill al fields!')));
-                            } else if (value.length < 8) {
-                              return 'password must be taller than 8 digit';
-                            } else {
-                              return null;
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      height: 20,
-                    ),
-                    SizedBox(
-                      width: MediaQuery.of(context).size.width * 0.9,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 18.0),
-                        child: TextFormField(
-                          decoration: InputDecoration(
-                            enabledBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onPrimary)),
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: Theme.of(context).colorScheme.primary,
-                                width: 3,
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            hintText: '*******',
-                            label: Text(
-                              'Password check',
-                              style: TextStyle(
-                                  color:
-                                  Theme.of(context).colorScheme.onPrimary),
-                            ),
-                            icon: Icon(
-                              Icons.password_sharp,
-                              color: Theme.of(context).colorScheme.onPrimary,
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value != _password1Controller) {
-                              return 'password check must be same with password';
-                            } else {
-                              return null;
-                            }
-                          },
-                          controller: _password2Controller,
-                        ),
-                      ),
-                    ),
-                  ],
+              const LogInRegisterHeader(title: '',), // Boş title kaldırıldı
+              const Header(title: 'Register'),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  RegisterTextFieldFormName(
+                    hintText: 'Name',
+                    label: 'Your Name',
+                    icon: Icons.account_box,
+                    controller: _nameController,
+                    name: _nameController.text,
+                  ),
+                  const SizedBox(width: 10),
+                  RegisterTextFieldFormName(
+                    hintText: 'Surname',
+                    label: 'Your Surname',
+                    icon: Icons.account_box,
+                    controller: _surnameController,
+                    name: _surnameController.text,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              TextFieldForm(
+                hintText: 'username123',
+                label: 'Username',
+                icon: Icons.drive_file_rename_outline,
+                controller: _usernameController,
+              ),
+              const SizedBox(height: 20),
+              TextFieldForm(
+                hintText: 'abc@gmail.com',
+                label: 'E-mail',
+                icon: Icons.email,
+                controller: _emailController,
+              ),
+              const SizedBox(height: 20),
+              _buildPasswordField(_password1Controller, 'Password', Icons.lock),
+              const SizedBox(height: 20),
+              _buildPasswordField(_password2Controller, 'Confirm Password', Icons.lock_outline, checkMatch: true),
+              const SizedBox(height: 30),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  elevation: 10,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                ),
+                onPressed: () async {
+                  if (_formKey.currentState!.validate()) {
+                    await loginServices.register(
+                      context,
+                      _emailController,
+                      _password1Controller,
+                      _nameController,
+                      _surnameController,
+                      _usernameController,
+                    );
+                  }
+                },
+                child: const Text(
+                  'Register',
+                  style: TextStyle(fontSize: 20, color: Colors.white),
                 ),
               ),
-              ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                      elevation: 10,
-                      backgroundColor: Theme.of(context).colorScheme.primary),
-                  onPressed: () async {
-                    await loginServices.register(
-                        context, _emailController, _password1Controller);
-                  },
-                  child: Text(
-                    '    Register    ',
-                    style: TextStyle(fontSize: 20, color: Colors.white),
-                  )),
-              Container(
-                width: MediaQuery.of(context).size.width * 0.8,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                        width: 126,
-                        child: Text(
-                          'If you have account',
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.onPrimary),
-                        )),
-                    SizedBox(
-                        width: 60,
-                        child: TextButton(
-                            onPressed: () {
-                              Navigator.pushReplacementNamed(context, '/login');
-                            },
-                            child: Text(
-                              'Login',
-                              style: TextStyle(
-                                  color: Theme.of(context).colorScheme.primary),
-                            )))
-                  ],
-                ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Already have an account? '),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushReplacementNamed(context, '/login');
+                    },
+                    child: Text(
+                      'Login',
+                      style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -232,60 +119,33 @@ class _RegisterState extends State<Register> {
       ),
     );
   }
-}
 
-class TextFieldForm extends StatelessWidget {
-  final String hintText;
-  final String label;
-  final IconData icon;
-  final TextEditingController controller;
-  late String name;
-
-  TextFieldForm(
-      {super.key,
-        required this.hintText,
-        required this.label,
-        required this.icon,
-        required this.controller,
-        required this.name});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildPasswordField(TextEditingController controller, String label, IconData icon, {bool checkMatch = false}) {
     return SizedBox(
       width: MediaQuery.of(context).size.width * 0.9,
       child: Padding(
         padding: const EdgeInsets.only(right: 18.0),
         child: TextFormField(
+          obscureText: true,
+          controller: controller,
           validator: (value) {
-            if (value!.isEmpty) {
-              return 'Please fill al fields!';
+            if (value == null || value.isEmpty) {
+              return 'Please enter your password!';
+            } else if (value.length < 8) {
+              return 'Password must be at least 8 characters long!';
+            } else if (checkMatch && value.trim() != _password1Controller.text.trim()) {
+              return 'Passwords do not match!';
             }
             return null;
           },
-          onSaved: (value) {
-            name = value!;
-          },
-          controller: controller,
           decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle:
-            TextStyle(color: Theme.of(context).colorScheme.onPrimary),
             labelText: label,
-            labelStyle:
-            TextStyle(color: Theme.of(context).colorScheme.onPrimary),
-            icon: Icon(
-              icon,
-              size: 24,
-              color: Theme.of(context).colorScheme.onPrimary,
-            ),
+            icon: Icon(icon, color: Theme.of(context).colorScheme.primary),
             enabledBorder: UnderlineInputBorder(
-                borderSide:
-                BorderSide(color: Theme.of(context).colorScheme.onPrimary)),
+              borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+            ),
             focusedBorder: OutlineInputBorder(
-              borderSide: BorderSide(
-                color: Theme.of(context).colorScheme.primary,
-                width: 3,
-              ),
+              borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
               borderRadius: BorderRadius.circular(10),
             ),
           ),
@@ -300,15 +160,16 @@ class RegisterTextFieldFormName extends StatelessWidget {
   final String label;
   final IconData icon;
   final TextEditingController controller;
-  late String name;
+  final String name;
 
-  RegisterTextFieldFormName(
-      {super.key,
-        required this.hintText,
-        required this.label,
-        required this.icon,
-        required this.controller,
-        required this.name});
+  const RegisterTextFieldFormName({
+    super.key,
+    required this.hintText,
+    required this.label,
+    required this.icon,
+    required this.controller,
+    required this.name,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -316,33 +177,21 @@ class RegisterTextFieldFormName extends StatelessWidget {
       width: MediaQuery.of(context).size.width * 0.4,
       child: TextFormField(
         validator: (value) {
-          if (value!.isEmpty) {
-            return 'Please fill all fields!';
+          if (value == null || value.isEmpty) {
+            return 'Please fill this field!';
           }
           return null;
-        },
-        onSaved: (value) {
-          name = value!;
         },
         controller: controller,
         decoration: InputDecoration(
           hintText: hintText,
-          hintStyle: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
           labelText: label,
-          labelStyle: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
-          suffixIcon: Icon(
-            icon,
-            size: 24,
-            color: Theme.of(context).colorScheme.onPrimary,
-          ),
+          icon: Icon(icon, color: Theme.of(context).colorScheme.primary),
           enabledBorder: UnderlineInputBorder(
-              borderSide:
-              BorderSide(color: Theme.of(context).colorScheme.onPrimary)),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+          ),
           focusedBorder: OutlineInputBorder(
-            borderSide: BorderSide(
-              color: Theme.of(context).colorScheme.primary,
-              width: 3,
-            ),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
             borderRadius: BorderRadius.circular(10),
           ),
         ),
@@ -351,37 +200,3 @@ class RegisterTextFieldFormName extends StatelessWidget {
   }
 }
 
-class LogInRegisterHeader extends StatelessWidget {
-  const LogInRegisterHeader({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 195,
-      width: MediaQuery.of(context).size.width,
-      decoration: BoxDecoration(
-        image: DecorationImage(image: AssetImage('assets/images/Vector2.jpg'),fit: BoxFit.cover),
-      ),
-    );
-  }
-}
-
-class Header extends StatelessWidget {
-  const Header({
-    super.key,
-    required this.title,
-  });
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: TextStyle(
-          color: Theme.of(context).colorScheme.primary,
-
-          fontSize: 30),
-    );
-  }
-}
