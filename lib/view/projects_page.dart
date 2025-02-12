@@ -55,7 +55,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
   Future<void> _showCreateProjectDialog() async {
     String projectName = '';
-
+    
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -76,15 +76,12 @@ class _ProjectsPageState extends State<ProjectsPage> {
             onPressed: () async {
               if (projectName.trim().isNotEmpty) {
                 try {
-                  // Proje ismini belge ID olarak kullanmak için uygun hale getir
-                  String projectId = projectName.trim().replaceAll(' ', '_').toLowerCase();
-
-                  // Yeni projeyi oluştur
+                  // Projeyi, girilen isimle doküman olarak oluştur
                   await _firestore
                       .collection('users')
                       .doc(widget.uid)
                       .collection('projects')
-                      .doc(projectId) // Proje ID olarak düzenlenmiş proje ismi
+                      .doc(projectName.trim()) // Proje adını doküman ID'si olarak kullan
                       .set({
                     'name': projectName.trim(),
                     'createdAt': Timestamp.now(),
@@ -96,6 +93,10 @@ class _ProjectsPageState extends State<ProjectsPage> {
                   _loadProjects(); // Projeleri yeniden yükle
                 } catch (e) {
                   print('Proje oluşturma hatası: $e');
+                  // Kullanıcıya hata mesajı göster
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Proje oluşturulurken hata: $e')),
+                  );
                 }
               }
             },
@@ -105,7 +106,6 @@ class _ProjectsPageState extends State<ProjectsPage> {
       ),
     );
   }
-
 
   @override
   Widget build(BuildContext context) {

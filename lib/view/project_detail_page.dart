@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:to_gram_grad_project/view/task_detail_page.dart';
 
 class ProjectDetailPage extends StatefulWidget {
@@ -340,9 +341,9 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                         ),
                         childWhenDragging: Opacity(
                           opacity: 0.5,
-                          child: _buildTaskCard(task, color),
+                          child: _buildTaskCard(task, columnColors[status]!),
                         ),
-                        child: _buildTaskCard(task, color),
+                        child: _buildTaskCard(task, columnColors[status]!),
                       );
                     },
                   );
@@ -355,84 +356,129 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     );
   }
 
-  Widget _buildTaskCard(Map<String, dynamic> task, Color color) {
+  Widget _buildTaskCard(Map<String, dynamic> task, Color statusColor) {
+    // Bitiş tarihini kontrol et
+    bool isOverdue = false;
+    if (task['endDate'] != null) {
+      DateTime endDate = (task['endDate'] as Timestamp).toDate();
+      isOverdue = endDate.isBefore(DateTime.now());
+    }
+
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      elevation: 0,
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey[200]!),
+        borderRadius: BorderRadius.circular(8),
+        side: isOverdue 
+            ? const BorderSide(color: Colors.red, width: 2)
+            : BorderSide.none,
       ),
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => TaskDetailPage(
-                uid: widget.uid,
-                projectId: widget.projectId,
-                task: task,
-                statusColor: color,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          gradient: isOverdue 
+              ? LinearGradient(
+                  colors: [
+                    Colors.red.withOpacity(0.1),
+                    Colors.transparent,
+                  ],
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                )
+              : null,
+        ),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  task['title'] ?? 'İsimsiz Görev',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isOverdue ? Colors.red : null,
+                  ),
+                ),
               ),
-            ),
-          ).then((_) => _loadTasks());
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.1)),
+              if (isOverdue)
+                const Tooltip(
+                  message: 'Görev Süresi Doldu',
+                  child: Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.red,
+                    size: 20,
+                  ),
+                ),
+            ],
           ),
-          child: ListTile(
-            title: Text(
-              task['title'],
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-              ),
-            ),
-            subtitle: task['description']?.isNotEmpty ?? false
-                ? Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      task['description'],
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 4),
+              if (task['description'] != null && task['description'].toString().isNotEmpty)
+                Text(
+                  task['description'],
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.person_outline, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    task['assignedTo'] ?? 'Atanmamış',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  const SizedBox(width: 16),
+                  if (task['endDate'] != null) ...[
+                    Icon(
+                      Icons.calendar_today,
+                      size: 16,
+                      color: isOverdue ? Colors.red : Colors.grey[600],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      DateFormat('dd/MM/yyyy').format((task['endDate'] as Timestamp).toDate()),
                       style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 13,
+                        color: isOverdue ? Colors.red : Colors.grey[600],
                       ),
                     ),
-                  )
-                : null,
-            trailing: PopupMenuButton(
-              icon: Icon(Icons.more_vert, color: Colors.grey[600]),
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit, size: 20),
-                      SizedBox(width: 8),
-                      Text('Düzenle'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete, size: 20),
-                      SizedBox(width: 8),
-                      Text('Sil'),
-                    ],
-                  ),
-                ),
-              ],
-              onSelected: (value) {
-                // Düzenleme ve silme işlemleri
-              },
-            ),
+                  ],
+                  if (task['storyPoint'] != null) ...[
+                    const SizedBox(width: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${task['storyPoint']} SP',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: statusColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => TaskDetailPage(
+                  uid: widget.uid,
+                  projectId: widget.projectId,
+                  task: task,
+                  statusColor: statusColor,
+                ),
+              ),
+            ).then((_) => _loadTasks());
+          },
         ),
       ),
     );
