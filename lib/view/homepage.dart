@@ -1,10 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:to_gram_grad_project/view/profile_page.dart';
 import 'package:to_gram_grad_project/view/projects_page.dart';
+import 'package:to_gram_grad_project/view/project_detail_page.dart';
+import 'package:to_gram_grad_project/view/settings_page.dart';
 
 class HomePage extends StatefulWidget {
   final String uid;
-  const HomePage({super.key, required this.uid});
+
+  const HomePage({super.key, required this.uid,});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -13,6 +17,9 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
   Map<String, dynamic>? userInfo;
+  int activeProjectCount = 0;
+  int pendingTasksCount = 0;
+  List<Map<String, dynamic>> recentProjects = [];
 
   Future<void> getUserInfos() async {
     FirebaseFirestore _firebase = FirebaseFirestore.instance;
@@ -24,25 +31,106 @@ class _HomePageState extends State<HomePage> {
 
       if (resultGetUser.exists) {
         var result = resultGetUser.data() as Map<String, dynamic>;
-
         setState(() {
           userInfo = result;
         });
-
-        print("User data fetched successfully: $result");
       } else {
-        print("User document does not exist!");
+        // Kullanıcı dokümanı yoksa oluştur
+        await _userDocReference.set({
+          'username': 'Kullanıcı',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        setState(() {
+          userInfo = {'username': 'Kullanıcı'};
+        });
       }
     } catch (e) {
       print("Error fetching user data: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kullanıcı bilgileri alınırken hata oluştu')),
+      );
     }
   }
 
+  Future<void> getActiveProjectCount() async {
+    try {
+      var projectsSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.uid)
+          .collection('projects')
+          .where('status', isEqualTo: 'active')
+          .get();
+
+      setState(() {
+        activeProjectCount = projectsSnapshot.docs.length;
+      });
+    } catch (e) {
+      print("Aktif proje sayısı alınırken hata: $e");
+    }
+  }
+
+  Future<void> getPendingTasksCount() async {
+    try {
+      var projectsSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.uid)
+          .collection('projects')
+          .get();
+
+      int totalPendingTasks = 0;
+
+      for (var project in projectsSnapshot.docs) {
+        var tasksSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.uid)
+            .collection('projects')
+            .doc(project.id)
+            .collection('tasks')
+            .where('status', isEqualTo: 'todo')
+            .where('assignedToId', isEqualTo: widget.uid)
+            .get();
+
+        totalPendingTasks += tasksSnapshot.docs.length;
+      }
+
+      setState(() {
+        pendingTasksCount = totalPendingTasks;
+      });
+    } catch (e) {
+      print("Bekleyen görev sayısı alınırken hata: $e");
+    }
+  }
+
+  Future<void> loadRecentProjects() async {
+    try {
+      var projectsSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.uid)
+          .collection('projects')
+          .orderBy('createdAt', descending: true)
+          .limit(3)
+          .get();
+
+      setState(() {
+        recentProjects = projectsSnapshot.docs
+            .map((doc) => {
+                  ...doc.data(),
+                  'id': doc.id,
+                })
+            .toList();
+      });
+    } catch (e) {
+      print("Projeler yüklenirken hata: $e");
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     getUserInfos();
+    getActiveProjectCount();
+    loadRecentProjects();
+    getPendingTasksCount();
   }
 
   @override
@@ -60,7 +148,8 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             icon: const Icon(Icons.person),
             onPressed: () {
-              // Profil sayfasına yönlendirme
+              Route _profilePage=MaterialPageRoute(builder: (context)=>ProfilePage(uid: widget.uid));
+              Navigator.push(context, _profilePage);
             },
           ),
         ],
@@ -86,14 +175,14 @@ class _HomePageState extends State<HomePage> {
               // İstatistik kartları
               Row(
                 children: [
-                  _buildStatCard('Aktif Projeler', '5', Colors.blue),
+                  _buildStatCard('Aktif Projeler', activeProjectCount.toString(), Colors.blue),
                   const SizedBox(width: 16),
-                  _buildStatCard('Bekleyen Görevler', '12', Colors.orange),
+                  _buildStatCard('Bekleyen Görevler', pendingTasksCount.toString(), Colors.orange),
                 ],
               ),
               const SizedBox(height: 20),
 
-              // Projeler başlığı
+              // Projeler başlığı ve liste
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -111,32 +200,39 @@ class _HomePageState extends State<HomePage> {
                         MaterialPageRoute(
                           builder: (context) => ProjectsPage(uid: widget.uid),
                         ),
-                      );
+                      ).then((_) {
+                        getActiveProjectCount();
+                        loadRecentProjects();
+                      });
                     },
                     child: const Text('Tümünü Gör'),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
-
-              // Proje listesi
               _buildProjectList(),
             ],
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Yeni proje ekleme sayfasına yönlendirme
-        },
-        child: const Icon(Icons.add),
-      ),
+      
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
+          if (index == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => SettingsPage(
+
+                ),
+              ),
+            );
+          } else {
+            setState(() {
+              _selectedIndex = index;
+            });
+          }
         },
         items: const [
           BottomNavigationBarItem(
@@ -148,7 +244,7 @@ class _HomePageState extends State<HomePage> {
             label: 'Takvim',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat),
+            icon: Icon(Icons.settings),
             label: 'Ayarlar',
           ),
         ],
@@ -190,19 +286,69 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildProjectList() {
+    if (recentProjects.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Center(
+            child: Text(
+              'Henüz proje bulunmamakta',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+        ),
+      );
+    }
+
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: 3, // Örnek olarak 3 proje gösteriyoruz
+      itemCount: recentProjects.length,
       itemBuilder: (context, index) {
+        final project = recentProjects[index];
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
-            title: Text('Proje ${index + 1}'),
-            subtitle: const Text('3 görev bekliyor'),
-            trailing: const Icon(Icons.arrow_forward_ios),
+            title: Text(project['name']),
+            subtitle: Text('Durum: ${project['status']}'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: project['status'] == 'active' 
+                        ? Colors.green.withOpacity(0.1) 
+                        : Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    project['status'] == 'active' ? 'Aktif' : 'Pasif',
+                    style: TextStyle(
+                      color: project['status'] == 'active' ? Colors.green : Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_forward_ios, size: 16),
+              ],
+            ),
             onTap: () {
-              // Proje detay sayfasına yönlendirme
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProjectDetailPage(
+                    uid: widget.uid,
+                    projectId: project['id'],
+                    projectName: project['name'],
+                  ),
+                ),
+              ).then((_) {
+                loadRecentProjects();
+                getActiveProjectCount();
+                getPendingTasksCount();
+              });
             },
           ),
         );

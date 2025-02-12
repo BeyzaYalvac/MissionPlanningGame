@@ -108,7 +108,7 @@ class _RegisterState extends State<Register> {
                     },
                     child: Text(
                       'Login',
-                      style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                      style: TextStyle(color: Colors.black),
                     ),
                   ),
                 ],

@@ -107,6 +107,91 @@ class _ProjectsPageState extends State<ProjectsPage> {
     );
   }
 
+  Future<void> _showEditProjectDialog(Map<String, dynamic> project) async {
+    String newProjectName = project['name'];
+    
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Proje Adını Düzenle'),
+        content: TextField(
+          decoration: const InputDecoration(
+            labelText: 'Yeni Proje Adı',
+          ),
+          controller: TextEditingController(text: project['name']),
+          onChanged: (value) => newProjectName = value,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (newProjectName.trim().isNotEmpty) {
+                try {
+                  await _firestore
+                      .collection('users')
+                      .doc(widget.uid)
+                      .collection('projects')
+                      .doc(project['id'])
+                      .update({
+                    'name': newProjectName.trim(),
+                  });
+                  Navigator.pop(context);
+                  _loadProjects();
+                } catch (e) {
+                  print('Proje güncelleme hatası: $e');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Proje güncellenirken hata: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Güncelle'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteProject(Map<String, dynamic> project) async {
+    bool confirmDelete = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Projeyi Sil'),
+        content: const Text('Bu projeyi silmek istediğinizden emin misiniz?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sil', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    ) ?? false;
+
+    if (confirmDelete) {
+      try {
+        await _firestore
+            .collection('users')
+            .doc(widget.uid)
+            .collection('projects')
+            .doc(project['id'])
+            .delete();
+        _loadProjects();
+      } catch (e) {
+        print('Proje silme hatası: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Proje silinirken hata: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -150,7 +235,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
                         crossAxisCount: 2,
                         crossAxisSpacing: 16,
                         mainAxisSpacing: 16,
-                        childAspectRatio: 1.2,
+                        childAspectRatio: 1.0,
                       ),
                       itemCount: projects.length,
                       itemBuilder: (context, index) {
@@ -176,8 +261,9 @@ class _ProjectsPageState extends State<ProjectsPage> {
                               ).then((_) => _loadProjects());
                             },
                             child: Padding(
-                              padding: const EdgeInsets.all(16.0),
+                              padding: const EdgeInsets.all(12.0),
                               child: Column(
+                                mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
@@ -187,36 +273,72 @@ class _ProjectsPageState extends State<ProjectsPage> {
                                         child: Text(
                                           project['name'],
                                           style: const TextStyle(
-                                            fontSize: 18,
+                                            fontSize: 16,
                                             fontWeight: FontWeight.bold,
                                           ),
+                                          maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      if (!isOwner)
+                                      if (isOwner)
+                                        PopupMenuButton(
+                                          padding: EdgeInsets.zero,
+                                          icon: const Icon(Icons.more_vert, size: 20),
+                                          itemBuilder: (context) => [
+                                            const PopupMenuItem(
+                                              value: 'edit',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.edit, size: 20),
+                                                  SizedBox(width: 8),
+                                                  Text('Düzenle'),
+                                                ],
+                                              ),
+                                            ),
+                                            const PopupMenuItem(
+                                              value: 'delete',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.delete, size: 20, color: Colors.red),
+                                                  SizedBox(width: 8),
+                                                  Text('Sil', style: TextStyle(color: Colors.red)),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                          onSelected: (value) {
+                                            if (value == 'edit') {
+                                              _showEditProjectDialog(project);
+                                            } else if (value == 'delete') {
+                                              _deleteProject(project);
+                                            }
+                                          },
+                                        )
+                                      else if (!isOwner)
                                         const Tooltip(
                                           message: 'Davet edildiğiniz proje',
                                           child: Icon(
                                             Icons.people_outline,
-                                            size: 20,
+                                            size: 18,
                                             color: Colors.blue,
                                           ),
                                         ),
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
+                                  const Spacer(),
                                   Text(
                                     'Durum: ${project['status']}',
                                     style: TextStyle(
                                       color: Colors.grey[600],
+                                      fontSize: 12,
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 4),
                                   Text(
                                     'Oluşturulma: ${DateFormat('dd/MM/yyyy').format(project['createdAt'].toDate())}',
                                     style: TextStyle(
                                       color: Colors.grey[600],
-                                      fontSize: 12,
+                                      fontSize: 11,
                                     ),
                                   ),
                                 ],

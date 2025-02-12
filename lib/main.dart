@@ -14,10 +14,22 @@ void main() async{
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  void _changeTheme(ThemeMode themeMode) {
+    setState(() {
+      _themeMode = themeMode;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -28,20 +40,8 @@ class MyApp extends StatelessWidget {
         '/register': (context) => Register(),
 
       },
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        colorScheme: ColorScheme(
-            brightness: Brightness.light,
-            primary: Color(0xff3B1E54),
-            onPrimary: Color(0xff9B7EBD),
-            secondary: Color(0xff3b5ef9),
-            onSecondary: Color(0xffD4BEE4),
-            error: Color(0xff28105b),
-            onError: Color(0xff3b5ef9),
-            surface: Color(0xffEEEEEE),
-            onSurface: Color(0xff3b5ef9)),
-        useMaterial3: true,
-      ),
+      title: 'ToGram',
+
       home: Login(),
     );
   }

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:to_gram_grad_project/service/auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 
 class Login extends StatefulWidget {
@@ -45,12 +46,26 @@ class _LoginState extends State<Login> {
                   elevation: 10,
                   backgroundColor: Theme.of(context).colorScheme.onPrimary),
               onPressed: () async {
-                await loginServices.login(
-                    context, _emailController, _passwordController);
+                try {
+                  await loginServices.login(
+                      context, _emailController, _passwordController);
+                  // Giriş yapan kullanıcının bilgilerini güncelleme
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(FirebaseAuth.instance.currentUser?.uid)
+                      .set({
+                    'email': _emailController.text,
+                    'lastLoginAt': FieldValue.serverTimestamp(),
+                  }, SetOptions(merge: true)); // merge: true sayesinde mevcut username değeri korunur
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Giriş yapılırken hata oluştu: $e')),
+                  );
+                }
               },
               child: Text(
                 '    Log in    ',
-                style: TextStyle(fontSize: 20, color: Colors.white),
+                style: TextStyle(fontSize: 20, color: Colors.black),
               )),
           Container(
             width: MediaQuery.of(context).size.width * 0.8,
@@ -72,7 +87,7 @@ class _LoginState extends State<Login> {
                         child: Text(
                           'Register',
                           style: TextStyle(
-                              color: Theme.of(context).colorScheme.onPrimary),
+                              color: Colors.black),
                         )))
               ],
             ),
@@ -113,7 +128,7 @@ class TextFieldForm extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderSide: BorderSide(
-              color: Theme.of(context).colorScheme.onPrimary,
+              color: Colors.black,
               width: 3,
             ),
             borderRadius: BorderRadius.circular(10),
@@ -154,7 +169,7 @@ class Header extends StatelessWidget {
     return Text(
       title,
       style: TextStyle(
-          color: Theme.of(context).colorScheme.onPrimary,
+          color: Colors.black,
 
           fontSize: 30),
     );
