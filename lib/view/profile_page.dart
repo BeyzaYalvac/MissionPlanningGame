@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -23,6 +24,20 @@ class _ProfilePageState extends State<ProfilePage> {
     getUserInfo();
   }
 
+  Future<void> _signOut() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+
+      // Login sayfasına yönlendir ve geri dönüşü engelle
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Çıkış yapılırken bir hata oluştu')),
+      );
+    }
+  }
+
   Future<void> getUserInfo() async {
     try {
       var userDoc = await FirebaseFirestore.instance
@@ -37,7 +52,8 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kullanıcı bilgileri alınırken hata oluştu')),
+        const SnackBar(
+            content: Text('Kullanıcı bilgileri alınırken hata oluştu')),
       );
     }
   }
@@ -50,7 +66,7 @@ class _ProfilePageState extends State<ProfilePage> {
         maxHeight: 1024,
         imageQuality: 85,
       );
-      
+
       if (image == null) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -58,7 +74,8 @@ class _ProfilePageState extends State<ProfilePage> {
       );
 
       // Dosya yolu oluştur - uid'yi dosya adına ekleyelim
-      final String fileName = 'profile_${widget.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String fileName =
+          'profile_${widget.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final Reference storageRef = FirebaseStorage.instance
           .ref()
           .child('profile_images')
@@ -77,7 +94,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
       // Yükleme tamamlanana kadar bekle ve sonucu al
       final TaskSnapshot taskSnapshot = await uploadTask;
-      
+
       // URL'i al
       final String downloadUrl = await taskSnapshot.ref.getDownloadURL();
 
@@ -92,11 +109,11 @@ class _ProfilePageState extends State<ProfilePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profil resmi başarıyla güncellendi')),
       );
-
     } catch (e) {
       print('Hata detayı: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profil resmi yüklenirken bir hata oluştu')),
+        const SnackBar(
+            content: Text('Profil resmi yüklenirken bir hata oluştu')),
       );
     }
   }
@@ -141,32 +158,56 @@ class _ProfilePageState extends State<ProfilePage> {
           ? const Center(child: CircularProgressIndicator())
           : Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: GestureDetector(
-                      onTap: _showImageSourceDialog,
-                      child: CircleAvatar(
-                        radius: 50,
-                        backgroundImage: userInfo!['profileImageUrl'] != null
-                            ? NetworkImage(userInfo!['profileImageUrl'])
-                            : null,
-                        child: userInfo!['profileImageUrl'] == null
-                            ? const Icon(Icons.person, size: 50)
-                            : null,
+              child: SizedBox(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: GestureDetector(
+                        onTap: _showImageSourceDialog,
+                        child: CircleAvatar(
+                          radius: 50,
+                          backgroundImage: userInfo!['profileImageUrl'] != null
+                              ? NetworkImage(userInfo!['profileImageUrl'])
+                              : null,
+                          child: userInfo!['profileImageUrl'] == null
+                              ? const Icon(Icons.person, size: 50)
+                              : null,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  _buildInfoCard('Kullanıcı Adı', userInfo!['username'] ?? 'Belirtilmemiş'),
-                  _buildInfoCard('E-posta', userInfo!['email'] ?? 'Belirtilmemiş'),
-                  _buildInfoCard('Oluşturulma Tarihi', 
-                    userInfo!['createdAt'] != null 
-                      ? (userInfo!['createdAt'] as Timestamp).toDate().toString()
-                      : 'Belirtilmemiş'
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    _buildInfoCard('Kullanıcı Adı',
+                        userInfo!['username'] ?? 'Belirtilmemiş'),
+                    _buildInfoCard(
+                        'E-posta', userInfo!['email'] ?? 'Belirtilmemiş'),
+                    _buildInfoCard(
+                        'Oluşturulma Tarihi',
+                        userInfo!['createdAt'] != null
+                            ? (userInfo!['createdAt'] as Timestamp)
+                                .toDate()
+                                .toString()
+                            : 'Belirtilmemiş'),
+                    const SizedBox(), // En alta itmek için
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _signOut,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: const Text(
+                          'Çıkış Yap',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    )
+                  ],
+                ),
               ),
             ),
     );
@@ -195,9 +236,10 @@ class _ProfilePageState extends State<ProfilePage> {
                 fontWeight: FontWeight.bold,
               ),
             ),
+
           ],
         ),
       ),
     );
   }
-} 
+}

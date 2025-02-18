@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:to_gram_grad_project/view/create_project_page.dart';
 import 'package:to_gram_grad_project/view/project_detail_page.dart';
 
 class ProjectsPage extends StatefulWidget {
@@ -15,47 +16,105 @@ class _ProjectsPageState extends State<ProjectsPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   List<Map<String, dynamic>> projects = [];
   bool isLoading = true;
+  String? userEmail; // 📌 Kullanıcı e-posta değişkeni
 
   @override
   void initState() {
     super.initState();
+    _loadUserEmail(); // 📌 Kullanıcı e-postasını yükle
     _loadProjects();
   }
 
+  /// 📌 **Kullanıcının e-posta adresini Firestore'dan al**
+  Future<void> _loadUserEmail() async {
+    try {
+      var userDoc = await _firestore.collection('users').doc(widget.uid).get();
+      var data = userDoc.data();
+      if (data != null && data.containsKey('email')) {
+        setState(() {
+          userEmail = data['email']; // 🔥 **E-posta yüklenince güncelle**
+        });
+      }
+    } catch (e) {
+      print("Kullanıcı e-postası yüklenirken hata: $e");
+    }
+  }
+
+  /// 📌 **Kullanıcının sahip olduğu ve davet edildiği projeleri yükler**
   Future<void> _loadProjects() async {
     try {
-      print("Projeler yükleniyor... UID: ${widget.uid}"); // Debug için
-      var projectsSnapshot = await _firestore
+      setState(() {
+        isLoading = true;
+      });
+
+      List<Map<String, dynamic>> allProjects = [];
+
+      var ownProjectsSnapshot = await _firestore
           .collection('users')
           .doc(widget.uid)
           .collection('projects')
           .orderBy('createdAt', descending: true)
           .get();
 
-      var projectsList = projectsSnapshot.docs.map((doc) {
-        print("Proje verisi: ${doc.data()}"); // Debug için
-        return {
-          ...doc.data(),
+      for (var doc in ownProjectsSnapshot.docs) {
+        var data = doc.data();
+        allProjects.add({
+          ...data,
           'id': doc.id,
-        };
-      }).toList();
+          'isOwner': true,
+        });
+      }
+
+      if (userEmail != null) {
+        var invitedProjectsSnapshot = await _firestore
+            .collection('projects')
+            .where('teamMembers', arrayContains: userEmail)
+            .get();
+
+        for (var doc in invitedProjectsSnapshot.docs) {
+          var data = doc.data();
+          if (!allProjects.any((p) => p['id'] == doc.id)) {
+            allProjects.add({
+              ...data,
+              'id': doc.id,
+              'isOwner': false,
+            });
+          }
+        }
+      }
 
       setState(() {
-        projects = projectsList;
+        projects = allProjects;
         isLoading = false;
       });
-      print("Yüklenen proje sayısı: ${projects.length}"); // Debug için
     } catch (e) {
-      print('Hata: $e');
+      print('Proje yükleme hatası: $e');
       setState(() {
         isLoading = false;
       });
     }
   }
 
+  /// 📌 **Yeni proje oluşturma sayfasına yönlendirme**
+  void _goToCreateProjectPage() {
+    if (userEmail == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Kullanıcı e-postası yükleniyor, lütfen bekleyin!")),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateProjectPage(uid: widget.uid, userEmail: userEmail!),
+      ),
+    ).then((_) => _loadProjects()); // 📌 Yeni proje eklendikten sonra listeyi yenile
+  }
+
   Future<void> _showCreateProjectDialog() async {
     String projectName = '';
-    
+
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -81,7 +140,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
                       .collection('users')
                       .doc(widget.uid)
                       .collection('projects')
-                      .doc(projectName.trim()) // Proje adını doküman ID'si olarak kullan
+                      .doc(projectName
+                          .trim()) // Proje adını doküman ID'si olarak kullan
                       .set({
                     'name': projectName.trim(),
                     'createdAt': Timestamp.now(),
@@ -109,7 +169,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
   Future<void> _showEditProjectDialog(Map<String, dynamic> project) async {
     String newProjectName = project['name'];
-    
+
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -157,22 +217,24 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
   Future<void> _deleteProject(Map<String, dynamic> project) async {
     bool confirmDelete = await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Projeyi Sil'),
-        content: const Text('Bu projeyi silmek istediğinizden emin misiniz?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('İptal'),
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Projeyi Sil'),
+            content:
+                const Text('Bu projeyi silmek istediğinizden emin misiniz?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('İptal'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Sil', style: TextStyle(color: Colors.red)),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sil', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    ) ?? false;
+        ) ??
+        false;
 
     if (confirmDelete) {
       try {
@@ -241,7 +303,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
                       itemBuilder: (context, index) {
                         final project = projects[index];
                         final bool isOwner = project['ownerId'] == widget.uid;
-                        
+
                         return Card(
                           elevation: 4,
                           shape: RoundedRectangleBorder(
@@ -253,7 +315,9 @@ class _ProjectsPageState extends State<ProjectsPage> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => ProjectDetailPage(
-                                    uid: isOwner ? widget.uid : project['ownerId'],
+                                    uid: isOwner
+                                        ? widget.uid
+                                        : project['ownerId'],
                                     projectId: project['id'],
                                     projectName: project['name'],
                                   ),
@@ -267,7 +331,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Expanded(
                                         child: Text(
@@ -283,7 +348,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
                                       if (isOwner)
                                         PopupMenuButton(
                                           padding: EdgeInsets.zero,
-                                          icon: const Icon(Icons.more_vert, size: 20),
+                                          icon: const Icon(Icons.more_vert,
+                                              size: 20),
                                           itemBuilder: (context) => [
                                             const PopupMenuItem(
                                               value: 'edit',
@@ -299,9 +365,13 @@ class _ProjectsPageState extends State<ProjectsPage> {
                                               value: 'delete',
                                               child: Row(
                                                 children: [
-                                                  Icon(Icons.delete, size: 20, color: Colors.red),
+                                                  Icon(Icons.delete,
+                                                      size: 20,
+                                                      color: Colors.red),
                                                   SizedBox(width: 8),
-                                                  Text('Sil', style: TextStyle(color: Colors.red)),
+                                                  Text('Sil',
+                                                      style: TextStyle(
+                                                          color: Colors.red)),
                                                 ],
                                               ),
                                             ),
@@ -349,10 +419,11 @@ class _ProjectsPageState extends State<ProjectsPage> {
                       },
                     ),
             ),
+
       floatingActionButton: FloatingActionButton(
-        onPressed: _showCreateProjectDialog,
+        onPressed: _goToCreateProjectPage,
         child: const Icon(Icons.add),
       ),
     );
   }
-} 
+}

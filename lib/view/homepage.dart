@@ -1,9 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:to_gram_grad_project/view/profile_page.dart';
 import 'package:to_gram_grad_project/view/projects_page.dart';
 import 'package:to_gram_grad_project/view/project_detail_page.dart';
 import 'package:to_gram_grad_project/view/settings_page.dart';
+import 'package:to_gram_grad_project/view/profile_page.dart';
+import 'package:to_gram_grad_project/view/invitations_page.dart';
 
 class HomePage extends StatefulWidget {
   final String uid;
@@ -108,20 +109,32 @@ class _HomePageState extends State<HomePage> {
           .doc(widget.uid)
           .collection('projects')
           .orderBy('createdAt', descending: true)
-          .limit(3)
+          .limit(5)
           .get();
 
       setState(() {
-        recentProjects = projectsSnapshot.docs
-            .map((doc) => {
-                  ...doc.data(),
-                  'id': doc.id,
-                })
-            .toList();
+        recentProjects = projectsSnapshot.docs.map((doc) {
+          var data = doc.data();
+          return {
+            ...data,
+            'id': doc.id,
+            'isOwner': data['ownerId'] == widget.uid,
+          };
+        }).toList();
       });
     } catch (e) {
-      print("Projeler yüklenirken hata: $e");
+      print("Son projeler yüklenirken hata: $e");
     }
+  }
+
+  // Bekleyen davetleri kontrol eden stream
+  Stream<int> _getPendingInvitationsCount() {
+    return FirebaseFirestore.instance
+        .collection('project_invitations')
+        .where('email', isEqualTo: userInfo?['email'])
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
   }
 
   @override
@@ -139,17 +152,70 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('Proje Yönetimi'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            onPressed: () {
-              // Bildirimler sayfasına yönlendirme
+          // Bildirim ikonu
+          StreamBuilder<int>(
+            stream: _getPendingInvitationsCount(),
+            builder: (context, snapshot) {
+              final hasInvitations = (snapshot.data ?? 0) > 0;
+              
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      hasInvitations ? Icons.notifications_active : Icons.notifications,
+                      color: hasInvitations ? Colors.amber : null,
+                    ),
+                    onPressed: () {
+                      if (userInfo != null) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => InvitationsPage(
+                              userEmail: userInfo!['email'],
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  if (hasInvitations)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 14,
+                          minHeight: 14,
+                        ),
+                        child: Text(
+                          '${snapshot.data}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
             },
           ),
           IconButton(
             icon: const Icon(Icons.person),
             onPressed: () {
-              Route _profilePage=MaterialPageRoute(builder: (context)=>ProfilePage(uid: widget.uid));
-              Navigator.push(context, _profilePage);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProfilePage(uid: widget.uid),
+                ),
+              );
             },
           ),
         ],

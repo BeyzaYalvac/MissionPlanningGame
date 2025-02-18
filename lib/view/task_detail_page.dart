@@ -29,42 +29,59 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
   DateTime? _startDate;
   DateTime? _endDate;
   String? _selectedUserId;
-  List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _teamMembers = [];
   bool _isLoadingUsers = true;
 
   @override
   void initState() {
     super.initState();
-    _initializeData();
-    _loadUsers();
+    _loadTeamMembers().then((_) {
+      // Takım üyeleri yüklendikten sonra verileri güncelle
+      setState(() {
+        _initializeData();
+      });
+    });
   }
 
-  Future<void> _loadUsers() async {
+  Future<void> _loadTeamMembers() async {
     try {
-      print("Kullanıcılar yüklenmeye başlıyor..."); // Debug
-      var usersSnapshot = await _firestore.collection('users').get();
-      List<Map<String, dynamic>> tempUsers = [];
+      // Projeyi ana koleksiyondan al
+      var projectDoc = await _firestore
+          .collection('projects')
+          .doc(widget.projectId)
+          .get();
       
-      for (var doc in usersSnapshot.docs) {
-        var userData = doc.data();
-        print("Kullanıcı verisi: ${doc.id} - ${userData['username']}"); // Debug
-        tempUsers.add({
-          'id': doc.id,
-          'username': userData['username'] ?? 'İsimsiz Kullanıcı',
+      if (projectDoc.exists) {
+        var projectData = projectDoc.data()!;
+        List<String> memberEmails = List<String>.from(projectData['teamMembers'] ?? []);
+        
+        // Tüm üyelerin bilgilerini al
+        List<Map<String, dynamic>> members = [];
+        for (String email in memberEmails) {
+          var userQuery = await _firestore
+              .collection('users')
+              .where('email', isEqualTo: email)
+              .get();
+          
+          if (userQuery.docs.isNotEmpty) {
+            var userData = userQuery.docs.first.data();
+            members.add({
+              'id': userQuery.docs.first.id,
+              'email': email,
+              'username': userData['name'] ?? 'İsimsiz Kullanıcı',
+              'isOwner': projectData['ownerId'] == userQuery.docs.first.id,
+            });
+          }
+        }
+
+        setState(() {
+          _teamMembers = members;
+          _isLoadingUsers = false;
         });
       }
-
-      setState(() {
-        _users = tempUsers;
-        _isLoadingUsers = false;
-      });
-      print("Toplam yüklenen kullanıcı sayısı: ${_users.length}"); // Debug
-      print("Yüklenen kullanıcılar: $_users"); // Debug
     } catch (e) {
-      print('Kullanıcılar yüklenirken hata: $e');
-      setState(() {
-        _isLoadingUsers = false;
-      });
+      print('Takım üyeleri yüklenirken hata: $e');
+      setState(() => _isLoadingUsers = false);
     }
   }
 
@@ -124,19 +141,18 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
 
   Future<void> _saveTask() async {
     try {
-      print("Kaydetme başlıyor..."); // Debug
-      print("Seçili kullanıcı ID: $_selectedUserId"); // Debug
-      print("Yüklü kullanıcılar: $_users"); // Debug
-
       String assignedUsername = '';
+      String assignedEmail = '';
+      
       if (_selectedUserId != null) {
-        // Kullanıcı arama mantığını değiştiriyoruz
-        var matchingUsers = _users.where((user) => user['id'] == _selectedUserId).toList();
-        print("Eşleşen kullanıcılar: $matchingUsers"); // Debug
-
-        if (matchingUsers.isNotEmpty) {
-          assignedUsername = matchingUsers.first['username']?.toString() ?? '';
-          print("Atanan kullanıcı adı: $assignedUsername"); // Debug
+        var matchingUser = _teamMembers.firstWhere(
+          (user) => user['id'] == _selectedUserId,
+          orElse: () => {},
+        );
+        
+        if (matchingUser.isNotEmpty) {
+          assignedUsername = matchingUser['username']?.toString() ?? '';
+          assignedEmail = matchingUser['email']?.toString() ?? '';
 
           // Seçilen kullanıcının projelerini kontrol et
           var userProjectsRef = _firestore
@@ -145,7 +161,6 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
               .collection('projects');
 
           try {
-            // Projenin adını almak için ana projeyi çek
             var projectDoc = await _firestore
                 .collection('users')
                 .doc(widget.uid)
@@ -155,34 +170,25 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
 
             if (projectDoc.exists) {
               String projectName = projectDoc.data()?['name'] ?? '';
-              print("Proje adı: $projectName"); // Debug
               
-              // Atanan kullanıcının projeler koleksiyonunda bu proje var mı kontrol et
               var existingProject = await userProjectsRef.doc(widget.projectId).get();
 
-              // Eğer proje yoksa, kullanıcının projects koleksiyonuna ekle
               if (!existingProject.exists) {
-                print('Proje kullanıcıya ekleniyor: $projectName');
                 await userProjectsRef.doc(widget.projectId).set({
                   'name': projectName,
                   'createdAt': Timestamp.now(),
                   'status': 'active',
                   'ownerId': widget.uid,
                 });
-                print('Proje kullanıcıya eklendi');
               }
             }
           } catch (e) {
             print("Proje işlemleri sırasında hata: $e");
           }
-        } else {
-          print("Seçili kullanıcı ID için eşleşen kullanıcı bulunamadı");
         }
-      } else {
-        print("Seçili kullanıcı ID null");
       }
 
-      // Task güncelleme
+      // Ana task güncelleme
       await _firestore
           .collection('users')
           .doc(widget.uid)
@@ -197,14 +203,19 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
         'startDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
         'endDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
         'assignedToId': _selectedUserId,
-        'assignedTo': assignedUsername,
+        'assignedTo': assignedEmail,  // Email'i kaydediyoruz
+        'assignedToName': assignedUsername,  // Kullanıcı adını kaydediyoruz
         'updatedAt': Timestamp.now(),
       });
 
-      print("Task başarıyla güncellendi"); // Debug
+      // Başarılı mesajı göster
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Görev başarıyla güncellendi')),
       );
+
+      // Önceki sayfaya dön ve güncelleme yapıldığını bildir
+      Navigator.pop(context, true);
+
     } catch (e) {
       print('Hata detayı: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -231,43 +242,34 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
               child: DropdownButton<String?>(
                 isExpanded: true,
                 value: _selectedUserId != null && 
-                       _users.any((user) => user['id'] == _selectedUserId)
+                       _teamMembers.any((user) => user['id'] == _selectedUserId)
                     ? _selectedUserId
                     : null,
                 hint: const Text('Görev atanacak kişiyi seçin'),
                 items: [
-                  DropdownMenuItem<String?>(
+                  const DropdownMenuItem<String?>(
                     value: null,
                     child: Row(
                       children: [
-                        CircleAvatar(
-                          backgroundColor: widget.statusColor,
-                          radius: 15,
-                          child: const Text(
-                           'A',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 8,),
-                        const Text('Atanmamış'),
+                        Icon(Icons.person_outline),
+                        SizedBox(width: 8),
+                        Text('Atanmamış'),
                       ],
                     ),
                   ),
-                  ..._users.map((user) {
-                    print("Dropdown item oluşturuluyor: ${user['id']} - ${user['username']}"); // Debug için
+                  ..._teamMembers.map((member) {
                     return DropdownMenuItem<String?>(
-                      value: user['id'],
+                      value: member['id'],
                       child: Row(
                         children: [
                           CircleAvatar(
-                            backgroundColor: widget.statusColor,
+                            backgroundColor: member['isOwner'] 
+                                ? Colors.orange 
+                                : widget.statusColor,
                             radius: 15,
                             child: Text(
-                              user['username'].toString().isNotEmpty
-                                  ? user['username'].toString()[0].toUpperCase()
+                              member['username'].toString().isNotEmpty
+                                  ? member['username'].toString()[0].toUpperCase()
                                   : '?',
                               style: const TextStyle(
                                 color: Colors.white,
@@ -277,18 +279,36 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
                           ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text(
-                              user['username'].toString(),
-                              overflow: TextOverflow.ellipsis,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  member['username'].toString(),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  member['email'].toString(),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
                           ),
+                          if (member['isOwner'])
+                            const Tooltip(
+                              message: 'Proje Sahibi',
+                              child: Icon(Icons.star, color: Colors.orange, size: 16),
+                            ),
                         ],
                       ),
                     );
                   }).toList(),
                 ],
                 onChanged: (String? newValue) {
-                  print("Yeni seçilen değer: $newValue"); // Debug için
                   setState(() {
                     _selectedUserId = newValue;
                   });

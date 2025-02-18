@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:to_gram_grad_project/view/task_detail_page.dart';
+import 'package:to_gram_grad_project/view/project_statistics_page.dart';
+import 'package:to_gram_grad_project/view/invitations_page.dart';
 
 class ProjectDetailPage extends StatefulWidget {
   final String uid;
@@ -27,6 +29,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     'done': [],
     'verify': [],
   };
+  List<Map<String, dynamic>> teamMembers = [];
   bool isLoading = true;
 
   // Renk tanımlamaları
@@ -45,10 +48,63 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     'verify': Icons.verified,
   };
 
+  // Bekleyen davetleri kontrol eden stream
+  Stream<int> _getPendingInvitationsCount() {
+    return _firestore
+        .collection('project_invitations')
+        .where('email', isEqualTo: widget.uid) // veya kullanıcının emaili
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
+  }
+
   @override
   void initState() {
     super.initState();
-    _loadTasks();
+    _loadProjectData();
+  }
+
+  Future<void> _loadProjectData() async {
+    try {
+      // Projeyi ana koleksiyondan al
+      var projectDoc = await _firestore
+          .collection('projects')
+          .doc(widget.projectId)
+          .get();
+      
+      if (projectDoc.exists) {
+        var projectData = projectDoc.data()!;
+        List<String> memberEmails = List<String>.from(projectData['teamMembers'] ?? []);
+        
+        // Tüm üyelerin bilgilerini al
+        List<Map<String, dynamic>> members = [];
+        for (String email in memberEmails) {
+          var userQuery = await _firestore
+              .collection('users')
+              .where('email', isEqualTo: email)
+              .get();
+          
+          if (userQuery.docs.isNotEmpty) {
+            var userData = userQuery.docs.first.data();
+            members.add({
+              'email': email,
+              'name': userData['name'] ?? 'İsimsiz Kullanıcı',
+              'isOwner': projectData['ownerId'] == userQuery.docs.first.id,
+              'uid': userQuery.docs.first.id,
+            });
+          }
+        }
+
+        setState(() {
+          teamMembers = members;
+        });
+      }
+
+      await _loadTasks();
+    } catch (e) {
+      print('Proje verisi yüklenirken hata: $e');
+      setState(() => isLoading = false);
+    }
   }
 
   Future<void> _loadTasks() async {
@@ -78,6 +134,9 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
         tasks = tempTasks;
         isLoading = false;
       });
+
+      // Tasks yüklendikten sonra istatistikleri güncelle
+      await _updateStatistics();
     } catch (e) {
       print('Hata: $e');
       setState(() {
@@ -86,66 +145,113 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     }
   }
 
+  Future<void> _updateStatistics() async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(widget.uid)
+          .collection('projects')
+          .doc(widget.projectId)
+          .collection('statistics')
+          .add({
+        'date': Timestamp.now(),
+        'todo': tasks['todo']?.length ?? 0,
+        'doing': tasks['doing']?.length ?? 0,
+        'done': tasks['done']?.length ?? 0,
+        'verify': tasks['verify']?.length ?? 0,
+      });
+    } catch (e) {
+      print('İstatistik güncellenirken hata: $e');
+    }
+  }
+
   Future<void> _showAddTaskDialog(String status) async {
     String taskTitle = '';
     String taskDescription = '';
+    int difficulty = 1;
 
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Yeni Görev Ekle'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              decoration: const InputDecoration(
-                labelText: 'Görev Başlığı',
-                hintText: 'Görev başlığını giriniz',
-              ),
-              onChanged: (value) => taskTitle = value,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('Yeni Görev Ekle'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  decoration: const InputDecoration(
+                    labelText: 'Görev Başlığı',
+                    hintText: 'Görev başlığını giriniz',
+                  ),
+                  onChanged: (value) => taskTitle = value,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  decoration: const InputDecoration(
+                    labelText: 'Görev Açıklaması',
+                    hintText: 'Görev açıklamasını giriniz',
+                  ),
+                  onChanged: (value) => taskDescription = value,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Text('Zorluk Seviyesi: '),
+                    Expanded(
+                      child: Slider(
+                        value: difficulty.toDouble(),
+                        min: 1,
+                        max: 5,
+                        divisions: 4,
+                        label: difficulty.toString(),
+                        onChanged: (value) {
+                          setState(() {
+                            difficulty = value.round();
+                          });
+                        },
+                      ),
+                    ),
+                    Text(difficulty.toString()),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            TextField(
-              decoration: const InputDecoration(
-                labelText: 'Görev Açıklaması',
-                hintText: 'Görev açıklamasını giriniz',
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('İptal'),
               ),
-              onChanged: (value) => taskDescription = value,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('İptal'),
-          ),
-          TextButton(
-            onPressed: () async {
-              if (taskTitle.trim().isNotEmpty) {
-                await _firestore
-                    .collection('users')
-                    .doc(widget.uid)
-                    .collection('projects')
-                    .doc(widget.projectId)
-                    .collection('tasks')
-                    .add({
-                  'title': taskTitle,
-                  'description': taskDescription,
-                  'status': status,
-                  'createdAt': Timestamp.now(),
-                  'assignedTo': '',
-                  'assignedToId': '',
-                  'startDate': null,
-                  'endDate': null,
-                  'storyPoint': 0,
-                });
-                Navigator.pop(context);
-                _loadTasks();
-              }
-            },
-            child: const Text('Ekle'),
-          ),
-        ],
+              TextButton(
+                onPressed: () async {
+                  if (taskTitle.trim().isNotEmpty) {
+                    await _firestore
+                        .collection('users')
+                        .doc(widget.uid)
+                        .collection('projects')
+                        .doc(widget.projectId)
+                        .collection('tasks')
+                        .add({
+                      'title': taskTitle,
+                      'description': taskDescription,
+                      'status': status,
+                      'createdAt': Timestamp.now(),
+                      'assignedTo': '',
+                      'assignedToId': '',
+                      'startDate': null,
+                      'endDate': null,
+                      'storyPoint': 0,
+                      'difficulty': difficulty,
+                    });
+                    Navigator.pop(context);
+                    _loadTasks();
+                  }
+                },
+                child: const Text('Ekle'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -163,6 +269,112 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
     _loadTasks();
   }
 
+  void _showTeamMembersDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.group, color: Colors.blue),
+            const SizedBox(width: 8),
+            Text('Takım Üyeleri (${teamMembers.length})'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: teamMembers.map((member) => ListTile(
+              leading: CircleAvatar(
+                backgroundColor: member['isOwner'] ? Colors.orange : Colors.blue,
+                child: Text(
+                  member['name'][0].toUpperCase(),
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+              title: Text(member['name']),
+              subtitle: Text(member['email']),
+              trailing: member['isOwner']
+                  ? const Tooltip(
+                      message: 'Proje Sahibi',
+                      child: Icon(Icons.star, color: Colors.orange),
+                    )
+                  : null,
+            )).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Kapat'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAssignTaskDialog(Map<String, dynamic> task) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.assignment_ind, color: Colors.blue),
+            const SizedBox(width: 8),
+            const Text('Görevi Ata'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: teamMembers.map((member) => ListTile(
+              leading: CircleAvatar(
+                backgroundColor: member['isOwner'] ? Colors.orange : Colors.blue,
+                child: Text(
+                  (member['name'] ?? '').toString().isNotEmpty 
+                      ? member['name'][0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+              title: Text(member['name'] ?? 'İsimsiz Kullanıcı'),
+              subtitle: Text(member['email'] ?? ''),
+              trailing: task['assignedTo'] == member['email']
+                  ? const Icon(Icons.check_circle, color: Colors.green)
+                  : member['isOwner']
+                      ? const Tooltip(
+                          message: 'Proje Sahibi',
+                          child: Icon(Icons.star, color: Colors.orange),
+                        )
+                      : null,
+              onTap: () async {
+                await _firestore
+                    .collection('users')
+                    .doc(widget.uid)
+                    .collection('projects')
+                    .doc(widget.projectId)
+                    .collection('tasks')
+                    .doc(task['id'])
+                    .update({
+                  'assignedTo': member['email'],
+                  'assignedToName': member['name'],
+                  'assignedToId': member['uid'],
+                });
+                Navigator.pop(context);
+                _loadTasks();
+              },
+            )).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Kapat'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,9 +385,80 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
         ),
         elevation: 0,
         actions: [
+          // Takım üyeleri butonu
+          TextButton.icon(
+            icon: const Icon(Icons.group),
+            label: Text('${teamMembers.length} Üye'),
+            onPressed: _showTeamMembersDialog,
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+            ),
+          ),
+          // Bildirimler butonu
+          StreamBuilder<int>(
+            stream: _getPendingInvitationsCount(),
+            builder: (context, snapshot) {
+              final hasInvitations = (snapshot.data ?? 0) > 0;
+              
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.notifications,
+                      color: hasInvitations ? Colors.amber : Colors.white,
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => InvitationsPage(
+                            userEmail: widget.uid, // veya kullanıcının emaili
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  if (hasInvitations)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 14,
+                          minHeight: 14,
+                        ),
+                        child: Text(
+                          '${snapshot.data}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.analytics),
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProjectStatisticsPage(
+                    uid: widget.uid,
+                    projectId: widget.projectId,
+                  ),
+                ),
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.settings),
@@ -424,12 +707,36 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Icon(Icons.person_outline, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    task['assignedTo'] ?? 'Atanmamış',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
+                  // Atanan kişi avatarı
+                  if (task['assignedToName'] != null && task['assignedToName'].toString().isNotEmpty)
+                    Tooltip(
+                      message: '${task['assignedToName']} (${task['assignedTo']})',
+                      child: CircleAvatar(
+                        backgroundColor: statusColor.withOpacity(0.8),
+                        radius: 12,
+                        child: Text(
+                          task['assignedToName'][0].toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Tooltip(
+                      message: 'Atanmamış',
+                      child: CircleAvatar(
+                        backgroundColor: Colors.grey[400],
+                        radius: 12,
+                        child: const Icon(
+                          Icons.person_outline,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
                   const SizedBox(width: 16),
                   if (task['endDate'] != null) ...[
                     Icon(
@@ -445,29 +752,54 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                       ),
                     ),
                   ],
-                  if (task['storyPoint'] != null) ...[
+                  if (task['storyPoint'] != null || task['difficulty'] != null) ...[
                     const SizedBox(width: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${task['storyPoint']} SP',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: statusColor,
+                    if (task['storyPoint'] != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${task['storyPoint']} SP',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: statusColor,
+                          ),
                         ),
                       ),
-                    ),
+                    if (task['difficulty'] != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.trending_up, size: 14, color: Colors.purple),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${task['difficulty']}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.purple,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ],
               ),
             ],
           ),
-          onTap: () {
-            Navigator.push(
+          onTap: () async {
+            final result = await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => TaskDetailPage(
@@ -477,7 +809,11 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                   statusColor: statusColor,
                 ),
               ),
-            ).then((_) => _loadTasks());
+            );
+            
+            if (result == true) {
+              _loadTasks();
+            }
           },
         ),
       ),
