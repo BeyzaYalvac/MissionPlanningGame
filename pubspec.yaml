@@ -42,6 +42,8 @@ dependencies:
   firebase_storage: ^12.4.2
   image_picker: ^1.1.2
   fl_chart: ^0.70.2
+  flame: ^1.25.0
+  flame_tiled: ^2.0.1
 
 dev_dependencies:
   flutter_test:
@@ -67,6 +69,9 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/images/
+    - assets/images/characters/Female adventurer/
+    - assets/tiles/maps/
+    - assets/tiles/
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
