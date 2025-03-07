@@ -1,0 +1,2 @@
+C:/Users/beyza/AndroidStudioProjects/to_gram_grad_project/android/app/.cxx/Debug/6b6y5z1e/armeabi-v7a/CMakeFiles/edit_cache.dir
+C:/Users/beyza/AndroidStudioProjects/to_gram_grad_project/android/app/.cxx/Debug/6b6y5z1e/armeabi-v7a/CMakeFiles/rebuild_cache.dir
